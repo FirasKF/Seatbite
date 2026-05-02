@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { QRCodeSVG } from 'qrcode.react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 /*──────────────────────────────────────────────
   FALLBACK DATA — real movies & venues used
@@ -138,6 +139,169 @@ async function apiGet(path) {
 }
 
 /*──────────────────────────────────────────────
+  TICKET SCANNER MODAL
+──────────────────────────────────────────────*/
+function TicketScanner({ onClose }) {
+  const [scanning, setScanning] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [demoTickets, setDemoTickets] = useState([]);
+  const scannerRef = useRef(null);
+  const lastDecodedRef = useRef(null);
+
+  // Fetch 3 real (movie, venue, showtime) triples for the demo cards.
+  // /api/showtimes requires movieId+venueId, so we cascade per movie.
+  // If anything fails, that card is dropped; if all fail, the section is hidden.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const moviesRes = await fetch(`${API_BASE}/movies`);
+        if (!moviesRes.ok) throw new Error();
+        const movies = await moviesRes.json();
+        const seats = ['C5', 'F8', 'A4'];
+        const picks = movies.slice(0, 3);
+        const tickets = await Promise.all(picks.map(async (movie, i) => {
+          try {
+            const chain = movie.chains?.[0];
+            if (!chain) return null;
+            const venuesRes = await fetch(`${API_BASE}/venues?chain=${chain}`);
+            if (!venuesRes.ok) return null;
+            const venues = await venuesRes.json();
+            const venue = venues[0];
+            if (!venue) return null;
+            const stRes = await fetch(`${API_BASE}/showtimes?movieId=${movie.id}&venueId=${venue.id}`);
+            if (!stRes.ok) return null;
+            const showtimes = await stRes.json();
+            const showtime = showtimes[0];
+            if (!showtime) return null;
+            return {
+              showtimeId: showtime.id,
+              seat: seats[i],
+              movieTitle: movie.title,
+              venueName: venue.name,
+              chain,
+              startsAt: showtime.startsAt,
+            };
+          } catch { return null; }
+        }));
+        if (!cancelled) setDemoTickets(tickets.filter(Boolean));
+      } catch {
+        if (!cancelled) setDemoTickets([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Release camera on modal close.
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {});
+        scannerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleScanSuccess = (decodedText) => {
+    if (lastDecodedRef.current === decodedText) return; // dedupe rapid re-fires
+    lastDecodedRef.current = decodedText;
+    try {
+      const url = new URL(decodedText);
+      if (url.origin !== window.location.origin) throw new Error('origin');
+      if (!url.searchParams.has('showtime') || !url.searchParams.has('seat')) throw new Error('params');
+      // Valid SeatBite URL — stop scanner, brief success, navigate.
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {});
+        scannerRef.current = null;
+      }
+      setScanning(false);
+      setErrorMsg('✓ Ticket detected');
+      setTimeout(() => { window.location.href = decodedText; }, 500);
+    } catch {
+      setErrorMsg('Not a SeatBite ticket — keep scanning...');
+      setTimeout(() => {
+        setErrorMsg(null);
+        lastDecodedRef.current = null;
+      }, 1500);
+    }
+  };
+
+  const startScanning = async () => {
+    setErrorMsg(null);
+    try {
+      const scanner = new Html5Qrcode("qr-scanner-region");
+      scannerRef.current = scanner;
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        handleScanSuccess,
+        () => {} // ignore per-frame failures
+      );
+      setScanning(true);
+    } catch {
+      scannerRef.current = null;
+      setErrorMsg('Camera unavailable — try opening on a phone, or pick a demo ticket below.');
+    }
+  };
+
+  const handleDemoClick = (t) => {
+    window.location.href = `/?showtime=${encodeURIComponent(t.showtimeId)}&seat=${encodeURIComponent(t.seat)}`;
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(10,10,15,0.92)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: font, overflow: "auto" }}>
+      <div style={{ position: "relative", maxWidth: 400, width: "100%", background: "rgba(20,20,30,0.95)", borderRadius: 16, padding: "32px 24px", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <button onClick={onClose} aria-label="Close"
+          style={{ position: "absolute", top: 12, right: 12, background: "transparent", border: "none", color: "rgba(255,255,255,0.5)", fontSize: 18, cursor: "pointer", padding: 4 }}>✕</button>
+
+        <h1 style={{ fontFamily: fontD, fontSize: 32, letterSpacing: 2, color: "#fff", textAlign: "center", marginTop: 0, marginBottom: 4 }}>SEATBITE</h1>
+        <p style={{ textAlign: "center", color: "rgba(255,255,255,0.5)", fontSize: 12, marginBottom: 20 }}>Scan your ticket · اسكن تذكرتك</p>
+
+        <div style={{ width: 280, height: 280, position: "relative", borderRadius: 16, overflow: "hidden", background: "rgba(0,0,0,0.6)", margin: "0 auto" }}>
+          <div id="qr-scanner-region" style={{ width: "100%", height: "100%" }} />
+          {!scanning && (
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "rgba(255,255,255,0.4)", pointerEvents: "none" }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>📷</div>
+              <div style={{ fontSize: 12, padding: "0 24px", textAlign: "center" }}>Point your camera at your ticket QR code</div>
+            </div>
+          )}
+        </div>
+
+        {errorMsg && (
+          <div style={{ textAlign: "center", marginTop: 12, fontSize: 12, fontWeight: 600, color: errorMsg.startsWith('✓') ? "#22c55e" : "rgba(245,158,11,0.95)" }}>
+            {errorMsg}
+          </div>
+        )}
+
+        {!scanning && (
+          <button onClick={startScanning}
+            style={{ background: `linear-gradient(135deg, ${oc}, #dc2f02)`, color: "#fff", border: "none", padding: "12px 24px", borderRadius: 10, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", marginTop: 16 }}>
+            📷 Scan QR Code
+          </button>
+        )}
+
+        {demoTickets.length > 0 && (
+          <>
+            <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "24px 0 14px" }} />
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: 2, marginBottom: 12 }}>DEMO TICKETS</div>
+            {demoTickets.map((t) => (
+              <div key={`${t.showtimeId}-${t.seat}`} onClick={() => handleDemoClick(t)}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 10, marginBottom: 8, cursor: "pointer" }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: CHAIN_COLORS[t.chain] || "#666", flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: "#fff", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{t.movieTitle}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{t.venueName} · Seat {t.seat} · {new Date(t.startsAt).toLocaleString()}</div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/*──────────────────────────────────────────────
   COMPONENT
 ──────────────────────────────────────────────*/
 export default function SeatBite() {
@@ -173,6 +337,7 @@ export default function SeatBite() {
   const [qrShowtime, setQrShowtime] = useState('');
   const [qrSeat, setQrSeat] = useState('');
   const [qrUrl, setQrUrl] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   /* ── Fetch catalog (movies, venues, menu) on mount; fall back per-resource ── */
   useEffect(() => {
@@ -428,6 +593,7 @@ export default function SeatBite() {
     </div>
     <div className="sb-header-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
       {tItems > 0 && <span className="sb-header-cart" style={{ background: "rgba(232,93,4,0.15)", color: "#fff", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{tItems} · {tPrice} ر.س</span>}
+      <button className="sb-header-btn" style={{ ...btn(false), padding: "8px 14px", fontSize: 13, background: "rgba(255,255,255,0.15)", border: "none" }} onClick={() => setScannerOpen(true)}>📷<span className="sb-header-scan-text"> Scan Ticket</span></button>
       <button className="sb-header-btn" style={{ ...btn(false), padding: "8px 14px", fontSize: 13, background: "rgba(255,255,255,0.15)", border: "none" }} onClick={() => setAdminMode(true)}>Admin</button>
       <button className="sb-header-btn" style={{ ...btn(false), padding: "8px 14px", fontSize: 13, background: "rgba(255,255,255,0.15)", border: "none" }}>تسجيل</button>
     </div>
@@ -807,6 +973,8 @@ export default function SeatBite() {
         </div>
       )}
 
+      {scannerOpen && <TicketScanner onClose={() => setScannerOpen(false)} />}
+
       <style>{`@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.5)} }
   @keyframes shimmer { 0%{opacity:0.3} 50%{opacity:0.6} 100%{opacity:0.3} }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -828,6 +996,8 @@ export default function SeatBite() {
   @media (max-width: 540px) {
     /* Seat picker: rows E–H are ~512px wide; scroll horizontally on phones */
     .sb-seat-grid      { overflow-x: auto !important; align-items: flex-start !important; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+    /* Scan Ticket button: emoji-only on phones to save header space */
+    .sb-header-scan-text { display: none !important; }
   }
   
   /* The ultimate reset for React/Vite/Next apps */
