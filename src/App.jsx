@@ -47,6 +47,19 @@ const ALL_VENUES = {
 
 const CHAIN_COLORS = { muvi: "#6c2dc7", AMC: "#c41230", VOX: "#e6007e" };
 
+const NEXT_STATUS = { confirmed: 'preparing', preparing: 'onway', onway: 'delivered' };
+const STATUS_BG = {
+  confirmed: 'rgba(245,158,11,0.18)',
+  preparing: 'rgba(168,85,247,0.18)',
+  onway:     'rgba(59,130,246,0.18)',
+  delivered: 'rgba(34,197,94,0.18)',
+};
+const formatCard = (v) => v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+const formatExpiry = (v) => {
+  const d = v.replace(/\D/g, '').slice(0, 4);
+  return d.length >= 3 ? `${d.slice(0,2)}/${d.slice(2)}` : d.length === 2 ? `${d}/` : d;
+};
+
 function getVenuesForMovie(movie, venuesByChain = ALL_VENUES) {
   const chains = movie.chains || ["muvi", "AMC", "VOX"];
   const results = [];
@@ -144,6 +157,15 @@ export default function SeatBite() {
   const [venuesByChain, setVenuesByChain] = useState(ALL_VENUES);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showtimeId, setShowtimeId] = useState(null);
+  const [cardName, setCardName] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [adminMode, setAdminMode] = useState(false);
+  const [adminOrders, setAdminOrders] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminFilter, setAdminFilter] = useState('all');
 
   /* ── Fetch catalog (movies, venues, menu) on mount; fall back per-resource ── */
   useEffect(() => {
@@ -216,7 +238,7 @@ export default function SeatBite() {
 
   /* ── Step 3 → 4: POST the order. Falls back to the local timeline if the API can't be reached. ── */
   const placeOrder = async () => {
-    const goLocal = () => { setStep(4); setOStage(0); };
+    const goLocal = () => { setStep(5); setOStage(0); };
     if (!showtimeId) return goLocal();
     const items = Object.entries(cart).map(([id, qty]) => ({ menuItemId: id, qty }));
     try {
@@ -238,9 +260,46 @@ export default function SeatBite() {
     }
   };
 
+  /* ── Step 4: Pay click — fake 1.5s processing then run placeOrder ── */
+  const handlePay = async () => {
+    setProcessing(true);
+    await new Promise((r) => setTimeout(r, 1500));
+    setProcessing(false);
+    placeOrder();
+  };
+
+  /* ── Admin: fetch all orders, fired when adminMode flips on ── */
+  const fetchAdminOrders = useCallback(async () => {
+    setAdminLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/orders`);
+      if (res.ok) setAdminOrders(await res.json());
+    } catch { /* ignore */ }
+    finally { setAdminLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (adminMode) fetchAdminOrders();
+  }, [adminMode, fetchAdminOrders]);
+
+  /* ── Admin: optimistically update a row, refetch on failure ── */
+  const advanceStatus = async (id, status) => {
+    setAdminOrders((arr) => arr.map((o) => (o.id === id ? { ...o, status } : o)));
+    try {
+      const res = await fetch(`${API_BASE}/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      fetchAdminOrders();
+    }
+  };
+
   /* ── Order stage auto-advance ── */
   useEffect(() => {
-    if (step === 4 && oStage < 3) { const t = setTimeout(() => setOStage((x) => x + 1), 3000); return () => clearTimeout(t); }
+    if (step === 5 && oStage < 3) { const t = setTimeout(() => setOStage((x) => x + 1), 3000); return () => clearTimeout(t); }
   }, [step, oStage]);
 
   const tItems = Object.values(cart).reduce((a, b) => a + b, 0);
@@ -249,6 +308,17 @@ export default function SeatBite() {
   const rem = (id) => setCart((c) => { const n = { ...c }; if (n[id] > 1) n[id]--; else delete n[id]; return n; });
   const fMovies = movies.filter((m) => langF === "all" || m.lang === langF);
   const fMenu = menu.filter((m) => filter === "all" || m.cat === filter);
+
+  /* ── Payment form validation (computed each render — cheap) ── */
+  const cardDigits = cardNumber.replace(/\s/g, '');
+  const expMatch = cardExpiry.match(/^(\d{2})\/(\d{2})$/);
+  const cy = new Date().getFullYear() % 100;
+  const paymentValid =
+    cardName.trim().length >= 3 &&
+    cardDigits.length === 16 &&
+    expMatch && +expMatch[1] >= 1 && +expMatch[1] <= 12 &&
+    +expMatch[2] >= cy && +expMatch[2] <= cy + 20 &&
+    /^\d{3}$/.test(cardCvv);
 
   /* ── Styles ── */
   const btn = (p = true) => ({ background: p ? `linear-gradient(135deg, ${oc}, #dc2f02)` : "rgba(255,255,255,0.08)", color: "#fff", border: p ? "none" : "1px solid rgba(255,255,255,0.12)", padding: "12px 24px", borderRadius: 10, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "all 0.2s", display: "inline-flex", alignItems: "center", gap: 8 });
@@ -318,6 +388,7 @@ export default function SeatBite() {
     </div>
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
       {tItems > 0 && <span style={{ background: "rgba(232,93,4,0.15)", color: "#fff", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{tItems} · {tPrice} ر.س</span>}
+      <button style={{ ...btn(false), padding: "8px 14px", fontSize: 13, background: "rgba(255,255,255,0.15)", border: "none" }} onClick={() => setAdminMode(true)}>Admin</button>
       <button style={{ ...btn(false), padding: "8px 14px", fontSize: 13, background: "rgba(255,255,255,0.15)", border: "none" }}>تسجيل</button>
     </div>
   </div>
@@ -325,7 +396,7 @@ export default function SeatBite() {
 
       <div style={{ maxWidth: 520, margin: "0 auto", padding: "24px 16px 100px", position: "relative", zIndex: 1 }}>
         <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 28 }}>
-          {[0,1,2,3,4].map((i) => <div key={i} style={{ width: step === i ? 32 : 10, height: 10, borderRadius: 5, background: step >= i ? oc : "rgba(255,255,255,0.15)", transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)" }} />)}
+          {[0,1,2,3,4,5].map((i) => <div key={i} style={{ width: step === i ? 32 : 10, height: 10, borderRadius: 5, background: step >= i ? oc : "rgba(255,255,255,0.15)", transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)" }} />)}
         </div>
 
         {!isLive && !bannerDismissed && !loadingMovies && (
@@ -461,14 +532,73 @@ export default function SeatBite() {
           {tItems > 0 && (
             <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(10,10,15,0.95)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.08)", padding: "14px 16px", zIndex: 50 }}>
               <div style={{ maxWidth: 520, margin: "0 auto" }}>
-                <button style={{ ...btn(), width: "100%", justifyContent: "center", padding: "14px 24px", fontSize: 15 }} onClick={placeOrder}>اطلب الآن · {tPrice} ر.س</button>
+                <button style={{ ...btn(), width: "100%", justifyContent: "center", padding: "14px 24px", fontSize: 15 }} onClick={() => setStep(4)}>اطلب الآن · {tPrice} ر.س</button>
               </div>
             </div>
           )}
         </>}
 
-        {/* ═══ STEP 4: Order Timeline ═══ */}
+        {/* ═══ STEP 4: Payment ═══ */}
         {step === 4 && <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <Back to={3} />
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>Seat {seat} · {tItems} items · {tPrice} ر.س</span>
+          </div>
+          <h1 style={{ fontFamily: fontD, fontSize: 32, letterSpacing: 1.5, marginBottom: 4, color: "#fff" }}>PAYMENT · الدفع</h1>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 20 }}>ادفع لتأكيد طلبك · Pay to confirm your order</p>
+
+          <div style={glass}>
+            <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Order Summary</div>
+            {Object.entries(cart).map(([id, qty]) => { const it = menu.find((m) => String(m.id) === id); return it ? (
+              <div key={id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6, color: "rgba(255,255,255,0.6)" }}>
+                <span>{it.emoji} {it.nameEn} × {qty}</span><span>{it.price * qty} ر.س</span>
+              </div>
+            ) : null; })}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 10, paddingTop: 10, display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
+              <span>المجموع · Total</span><span style={{ color: oc }}>{tPrice} ر.س</span>
+            </div>
+          </div>
+
+          <div style={glass}>
+            <div style={{ fontWeight: 600, marginBottom: 14, fontSize: 14 }}>Card Details</div>
+            <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", display: "block", marginBottom: 6 }}>Cardholder Name</label>
+            <input value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="As shown on card"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box" }} />
+            <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", display: "block", marginTop: 12, marginBottom: 6 }}>Card Number</label>
+            <input value={cardNumber} onChange={(e) => setCardNumber(formatCard(e.target.value))} placeholder="4242 4242 4242 4242" inputMode="numeric"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box", letterSpacing: 1 }} />
+            <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", display: "block", marginBottom: 6 }}>Expiry</label>
+                <input value={cardExpiry} onChange={(e) => setCardExpiry(formatExpiry(e.target.value))} placeholder="MM/YY" inputMode="numeric"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", display: "block", marginBottom: 6 }}>CVV</label>
+                <input type="password" value={cardCvv} onChange={(e) => setCardCvv(e.target.value.replace(/\D/g,'').slice(0,3))} placeholder="123" inputMode="numeric"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box" }} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={{ ...btn(false), flex: 1, justifyContent: "center" }} onClick={() => setStep(3)}>Cancel</button>
+            <button disabled={!paymentValid} onClick={handlePay}
+              style={{ ...btn(), flex: 2, justifyContent: "center", padding: "14px 24px", fontSize: 15, opacity: paymentValid ? 1 : 0.4, cursor: paymentValid ? "pointer" : "not-allowed" }}>
+              Pay {tPrice} ر.س
+            </button>
+          </div>
+
+          {processing && (
+            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", zIndex: 200, gap: 16 }}>
+              <div style={{ width: 48, height: 48, borderRadius: "50%", border: "4px solid rgba(255,255,255,0.1)", borderTopColor: oc, animation: "spin 0.8s linear infinite" }} />
+              <div style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>Processing payment...</div>
+            </div>
+          )}
+        </>}
+
+        {/* ═══ STEP 5: Order Timeline ═══ */}
+        {step === 5 && <>
           <h1 style={{ fontFamily: fontD, fontSize: 32, letterSpacing: 1.5, marginBottom: 4, color: "#fff" }}>!تم الطلب</h1>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 20 }}>Delivering to seat {seat} · {venue.name}, {venue.city}</p>
           <div style={glass}>
@@ -502,14 +632,78 @@ export default function SeatBite() {
             </div>
           </div>
           <button style={{ ...btn(false), width: "100%", justifyContent: "center", marginTop: 8 }}
-            onClick={() => { setStep(0); setMovie(null); setVenue(null); setSeat(null); setCart({}); setOStage(0); setShowtimeId(null); }}>
+            onClick={() => { setStep(0); setMovie(null); setVenue(null); setSeat(null); setCart({}); setOStage(0); setShowtimeId(null); setCardName(''); setCardNumber(''); setCardExpiry(''); setCardCvv(''); }}>
             طلب جديد · New Order
           </button>
         </>}
       </div>
 
+      {adminMode && (
+        <div style={{ position: "fixed", inset: 0, background: "#0a0a0f", zIndex: 1000, overflow: "auto", padding: 24, fontFamily: font, color: "#f0ece4" }}>
+          <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+              <h1 style={{ fontFamily: fontD, fontSize: 36, letterSpacing: 2, color: "#fff" }}>ADMIN DASHBOARD</h1>
+              <button style={{ ...btn(false), padding: "8px 16px" }} onClick={() => setAdminMode(false)}>← Back to Site</button>
+            </div>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+              <select value={adminFilter} onChange={(e) => setAdminFilter(e.target.value)}
+                style={{ background: "rgba(255,255,255,0.06)", color: "#fff", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", fontSize: 13, fontFamily: font }}>
+                <option value="all">All</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="preparing">Preparing</option>
+                <option value="onway">On the Way</option>
+                <option value="delivered">Delivered</option>
+              </select>
+              <button style={{ ...btn(false), padding: "8px 14px" }} onClick={fetchAdminOrders}>↻ Refresh</button>
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
+                {adminOrders.filter((o) => adminFilter === 'all' || o.status === adminFilter).length} orders
+              </span>
+            </div>
+            {adminLoading ? (
+              <div style={{ color: "rgba(255,255,255,0.5)", padding: 20, textAlign: "center" }}>Loading...</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>
+                    {["Order ID","Customer","Movie","Venue","Seat","Items","Total","Status","Action"].map((h) => (
+                      <th key={h} style={{ padding: "10px 8px", textAlign: "left" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminOrders.filter((o) => adminFilter === 'all' || o.status === adminFilter).map((o) => (
+                    <tr key={o.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      <td style={{ padding: "10px 8px", fontFamily: "monospace", fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{o.id?.slice(-6)}</td>
+                      <td style={{ padding: "10px 8px" }}>{o.guestName || (o.user ? "User" : "—")}</td>
+                      <td style={{ padding: "10px 8px" }}>{o.showtime?.movie?.title || "—"}</td>
+                      <td style={{ padding: "10px 8px" }}>{o.showtime?.venue?.name || "—"}</td>
+                      <td style={{ padding: "10px 8px", fontWeight: 600 }}>{o.seat}</td>
+                      <td style={{ padding: "10px 8px", fontSize: 12 }}>
+                        {o.items?.map((it) => `${it.menuItemId?.nameEn || '?'} ×${it.qty}`).join(', ')}
+                      </td>
+                      <td style={{ padding: "10px 8px", color: oc, fontWeight: 600 }}>{o.total} ر.س</td>
+                      <td style={{ padding: "10px 8px" }}>
+                        <span style={{ background: STATUS_BG[o.status] || "rgba(255,255,255,0.1)", padding: "3px 10px", borderRadius: 4, fontSize: 11, fontWeight: 600 }}>{o.status}</span>
+                      </td>
+                      <td style={{ padding: "10px 8px" }}>
+                        {NEXT_STATUS[o.status] && (
+                          <button style={{ ...btn(), padding: "5px 10px", fontSize: 11 }} onClick={() => advanceStatus(o.id, NEXT_STATUS[o.status])}>
+                            Mark {NEXT_STATUS[o.status]}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
       <style>{`@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.5)} }
   @keyframes shimmer { 0%{opacity:0.3} 50%{opacity:0.6} 100%{opacity:0.3} }
+  @keyframes spin { to { transform: rotate(360deg); } }
   
   /* The ultimate reset for React/Vite/Next apps */
   html, body, #root { 

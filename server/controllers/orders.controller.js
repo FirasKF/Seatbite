@@ -107,3 +107,24 @@ export const listOrders = asyncHandler(async (_req, res) => {
   );
   res.json(orders);
 });
+
+const VALID_STATUSES = ['confirmed', 'preparing', 'onway', 'delivered'];
+
+export const updateOrderStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body || {};
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: 'order id must be a valid ObjectId' });
+  }
+  if (!status || !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+  }
+
+  const order = await Order.findByIdAndUpdate(id, { status }, { new: true });
+  if (!order) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+  const populated = await populateOrder(Order.findById(order._id));
+  res.json(populated);
+});

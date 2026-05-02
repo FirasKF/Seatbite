@@ -25,9 +25,9 @@ There is **no test framework configured** — no `test` script, no Vitest/Jest d
 
 The entire app is a single ~480-line React component in [src/App.jsx](src/App.jsx). There is no router, no component split, no state management library, no backend. Future milestones (notably Milestone 5) are expected to add a back end and break this up.
 
-**Step-driven flow.** A single `step` state variable (0–4) drives a linear 5-screen flow rendered as conditional blocks in one component:
+**Step-driven flow.** A single `step` state variable (0–5) drives a linear 6-screen flow rendered as conditional blocks in one component:
 
-0. Pick a movie → 1. Pick a venue → 2. Pick a seat → 3. Build a cart → 4. Order tracking timeline.
+0. Pick a movie → 1. Pick a venue → 2. Pick a seat → 3. Build a cart → 4. Payment (fake card form) → 5. Order tracking timeline.
 
 Each step gates the next via a "next" button whose `disabled` state depends on the relevant selection (`movie`, `venue`, `seat`, `cart` non-empty).
 
@@ -48,6 +48,8 @@ Each step gates the next via a "next" button whose `disabled` state depends on t
 **Styles are inline.** Styling is done with inline `style={{...}}` objects throughout App.jsx (helpers `btn`, `cardSt`, `fbtn`, `stSeat`, `glass`). [src/App.css](src/App.css) is listed in the README's project structure but is **not imported** by [src/main.jsx](src/main.jsx) — only [src/index.css](src/index.css) is. Don't assume styles come from `App.css`.
 
 **Persistence:** none. A page refresh wipes movie/venue/seat/cart/order state.
+
+**Admin overlay.** A fixed-position overlay rendered when `adminMode` is true, triggered by the "Admin" button in the header. Lists orders from `GET /api/orders` and advances status via `PATCH /api/orders/:id/status` (no auth — intentional). Status flow: `confirmed → preparing → onway → delivered`.
 
 ## ESLint
 
