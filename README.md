@@ -41,9 +41,10 @@ The frontend and backend are **separate npm packages** — one `package.json` at
 - **Interactive seat picker** — seat map with per-showtime "taken" markers that update as orders come in
 - **Bilingual menu** — 14 items (snacks / meals / drinks) with Arabic + English names and SAR pricing
 - **Cart with running total** — add/remove items; total is recomputed server-side at checkout
-- **Fake payment page** — card form (cardholder name, 16-digit card with auto-formatting, MM/YY expiry, CVV) with full client-side validation before order confirmation
+- **Fake payment page** — three payment-method tabs (Credit/Debit, Apple Pay, STC Pay). The Credit/Debit form (cardholder name, 16-digit card with auto-formatting, MM/YY expiry, CVV) has full client-side validation; VISA / MC / mada / Amex brand badges and a "🔒 Encrypted" indicator are decorative. Apple Pay and STC Pay show mock confirmation UIs with no real payment integration — clicking Pay on any tab triggers the same fake 1.5s spinner and POSTs the order via the standard endpoint.
 - **Order placement and delivery timeline** — `confirmed → preparing → onway → delivered`, auto-advances on the client and is updatable from the admin dashboard
 - **Admin dashboard** — accessible via the "Admin" button in the header; view all orders, filter by status, advance status with a single click
+- **QR ticket flow** — admins generate printable seat QR codes from a dedicated section in the admin dashboard (showtime ID + seat → a `https://seatbite.vercel.app/?showtime=...&seat=...` URL); customers scan those QRs through an in-app camera modal (`html5-qrcode` integration) that auto-loads the movie / venue / seat context and skips straight to the menu. Desktop users without a webcam get a fallback list of three clickable demo tickets fetched from the live backend.
 - **User registration and JWT auth** — `/api/auth/register`, `/login`, `/me` endpoints with bcrypt password hashing (backend only — no frontend login UI yet)
 - **Mobile-responsive layout** — single-column flow scales to phone widths; seat picker and admin table become horizontally scrollable below 540px / 768px
 - **Cold-start wake-up banner** — informs users when the Render free tier is taking 30–60s to wake up, instead of falsely showing "live data unavailable"
@@ -837,6 +838,7 @@ The list is configurable via the `CORS_ORIGINS` env var (comma-separated; suppor
 ## Known Limitations & Future Work
 
 - **No login UI on the frontend** — `/api/auth/register`, `/login`, and `/me` are wired and tested, but the SPA doesn't expose a sign-in screen yet. The placeholder تسجيل button in the header is a no-op. The auth endpoints are fully documented in [API Documentation](#api-documentation) so a frontend pass can be added without backend changes.
+- **Apple Pay and STC Pay payment methods are visual mocks** — clicking Pay on these methods runs the same fake 1.5s spinner and places the order via the standard endpoint, identical to Credit/Debit. Real payment integration is out of scope for this milestone.
 - **Render free-tier cold starts** — the backend sleeps after 15 minutes of inactivity. The first request after a sleep takes 30–60 seconds, partially mitigated by the in-app "Waking up server..." banner. Could be eliminated by upgrading to Render's paid tier, or by adding an external cron pinger (e.g. UptimeRobot hitting `/api/health` every 10 minutes).
 - **Showtime picker UI** — the frontend auto-selects the first available showtime for the chosen movie+venue pair. The backend supports listing all showtimes (`GET /api/showtimes?movieId=&venueId=`) but the SPA has no UI for the user to pick a specific one.
 - **No pagination on `GET /api/orders`** — endpoint caps at the 50 newest orders. With significant volume this would need a `?limit=` and `?cursor=` (or `?page=`) query.
