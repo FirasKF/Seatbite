@@ -853,23 +853,35 @@ export default function SeatBite() {
             </div>
           )}
 
-          {/* Placeholder for unsupported methods */}
+          {/* Apple Pay / STC Pay mock UI (visual only — handlePay still runs the same fake flow) */}
           {paymentMethod !== 'credit' && (
-            <div style={{ ...glass, textAlign: "center", padding: 40, color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
-              {paymentMethod === 'apple' ? 'Apple Pay payment not configured · غير مفعل' : 'STC Pay not configured · غير مفعل'}
+            <div style={{ ...glass, textAlign: "center", padding: "32px 20px" }}>
+              <div style={{ fontSize: 56, marginBottom: 14 }}>
+                {paymentMethod === 'apple' ? '🍎' : '📱'}
+              </div>
+              <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6, color: "#fff" }}>
+                {paymentMethod === 'apple'
+                  ? 'Touch ID or Face ID to pay'
+                  : 'Confirm in STC Pay app'}
+              </div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)" }}>
+                {tPrice} ر.س will be charged to your {paymentMethod === 'apple' ? 'Apple Pay' : 'STC Pay'} account
+              </div>
             </div>
           )}
 
-          {/* Cancel + Pay (Pay only when Credit/Debit) */}
+          {/* Cancel + Pay (Pay always shown; only gated by paymentValid for Credit/Debit) */}
           <div style={{ display: "flex", gap: 8 }}>
             <button style={{ ...btn(false), flex: 1, justifyContent: "center" }} onClick={() => setStep(3)}>Cancel</button>
-            {paymentMethod === 'credit' && (
-              <button disabled={!paymentValid} onClick={handlePay}
-                style={{ ...btn(), flex: 2, justifyContent: "center", padding: "14px 24px", fontSize: 15, opacity: paymentValid ? 1 : 0.4, cursor: paymentValid ? "pointer" : "not-allowed" }}>
-                Pay {tPrice} ر.س
-              </button>
-            )}
+            <button disabled={paymentMethod === 'credit' && !paymentValid} onClick={handlePay}
+              style={{ ...btn(), flex: 2, justifyContent: "center", padding: "14px 24px", fontSize: 15, opacity: (paymentMethod === 'credit' && !paymentValid) ? 0.4 : 1, cursor: (paymentMethod === 'credit' && !paymentValid) ? "not-allowed" : "pointer" }}>
+              Pay {tPrice} ر.س
+            </button>
           </div>
+
+          <p style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 16 }}>
+            🔒 Secured by SeatBite Pay · PCI DSS Compliant
+          </p>
 
           {processing && (
             <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", zIndex: 200, gap: 16 }}>
