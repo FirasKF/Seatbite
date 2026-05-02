@@ -328,6 +328,7 @@ export default function SeatBite() {
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('credit');
   const [processing, setProcessing] = useState(false);
   const [adminMode, setAdminMode] = useState(false);
   const [adminOrders, setAdminOrders] = useState([]);
@@ -771,53 +772,103 @@ export default function SeatBite() {
 
         {/* ═══ STEP 4: Payment ═══ */}
         {step === 4 && <>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <Back to={3} />
-            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>Seat {seat} · {tItems} items · {tPrice} ر.س</span>
+          {/* Header: small circular back + title + subtitle */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+            <button onClick={() => setStep(3)} aria-label="Back"
+              style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontFamily: font, padding: 0, flexShrink: 0 }}>←</button>
+            <div>
+              <h1 style={{ fontFamily: font, fontSize: 22, fontWeight: 700, margin: 0, color: "#fff" }}>Review & Pay</h1>
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", margin: "2px 0 0 0" }}>Seat {seat} · {venue.name}</p>
+            </div>
           </div>
-          <h1 style={{ fontFamily: fontD, fontSize: 32, letterSpacing: 1.5, marginBottom: 4, color: "#fff" }}>PAYMENT · الدفع</h1>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 20 }}>ادفع لتأكيد طلبك · Pay to confirm your order</p>
 
+          {/* Order summary */}
           <div style={glass}>
-            <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Order Summary</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", letterSpacing: 2, fontWeight: 600, marginBottom: 12 }}>ORDER SUMMARY</div>
             {Object.entries(cart).map(([id, qty]) => { const it = menu.find((m) => String(m.id) === id); return it ? (
-              <div key={id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6, color: "rgba(255,255,255,0.6)" }}>
+              <div key={id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6, color: "rgba(255,255,255,0.7)" }}>
                 <span>{it.emoji} {it.nameEn} × {qty}</span><span>{it.price * qty} ر.س</span>
               </div>
             ) : null; })}
             <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 10, paddingTop: 10, display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
-              <span>المجموع · Total</span><span style={{ color: oc }}>{tPrice} ر.س</span>
+              <span>Total</span><span style={{ color: oc }}>{tPrice} ر.س</span>
             </div>
           </div>
 
-          <div style={glass}>
-            <div style={{ fontWeight: 600, marginBottom: 14, fontSize: 14 }}>Card Details</div>
-            <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", display: "block", marginBottom: 6 }}>Cardholder Name</label>
-            <input value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="As shown on card"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box" }} />
-            <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", display: "block", marginTop: 12, marginBottom: 6 }}>Card Number</label>
-            <input value={cardNumber} onChange={(e) => setCardNumber(formatCard(e.target.value))} placeholder="4242 4242 4242 4242" inputMode="numeric"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box", letterSpacing: 1 }} />
-            <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", display: "block", marginBottom: 6 }}>Expiry</label>
-                <input value={cardExpiry} onChange={(e) => setCardExpiry(formatExpiry(e.target.value))} placeholder="MM/YY" inputMode="numeric"
-                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box" }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", display: "block", marginBottom: 6 }}>CVV</label>
-                <input type="password" value={cardCvv} onChange={(e) => setCardCvv(e.target.value.replace(/\D/g,'').slice(0,3))} placeholder="123" inputMode="numeric"
-                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box" }} />
-              </div>
-            </div>
+          {/* Payment method tabs */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            {[
+              { key: 'credit', label: 'Credit / Debit', icon: '💳' },
+              { key: 'apple',  label: 'Apple Pay',     icon: '🍎' },
+              { key: 'stc',    label: 'STC Pay',       icon: '📱' },
+            ].map(({ key, label, icon }) => (
+              <button key={key} onClick={() => setPaymentMethod(key)}
+                style={{
+                  flex: 1, padding: "12px 6px", borderRadius: 10,
+                  border: paymentMethod === key ? `2px solid ${oc}` : "2px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: paymentMethod === key ? "#fff" : "rgba(255,255,255,0.65)",
+                  fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                }}>
+                <span style={{ fontSize: 20 }}>{icon}</span>
+                <span>{label}</span>
+              </button>
+            ))}
           </div>
 
+          {/* Card form — only when Credit/Debit is selected */}
+          {paymentMethod === 'credit' && (
+            <div style={glass}>
+              <label style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2, fontWeight: 600, display: "block", marginBottom: 6 }}>CARD NUMBER</label>
+              <input value={cardNumber} onChange={(e) => setCardNumber(formatCard(e.target.value))} placeholder="4242 4242 4242 4242" inputMode="numeric"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box", letterSpacing: 1 }} />
+
+              <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2, fontWeight: 600, display: "block", marginBottom: 6 }}>EXPIRY</label>
+                  <input value={cardExpiry} onChange={(e) => setCardExpiry(formatExpiry(e.target.value))} placeholder="MM/YY" inputMode="numeric"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2, fontWeight: 600, display: "block", marginBottom: 6 }}>CVV</label>
+                  <input type="password" value={cardCvv} onChange={(e) => setCardCvv(e.target.value.replace(/\D/g,'').slice(0,3))} placeholder="123" inputMode="numeric"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              <label style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2, fontWeight: 600, display: "block", marginTop: 12, marginBottom: 6 }}>CARDHOLDER NAME</label>
+              <input value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="As shown on card"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "10px 12px", color: "#fff", fontSize: 14, fontFamily: font, width: "100%", outline: "none", boxSizing: "border-box" }} />
+
+              {/* Card brand badges + Encrypted note */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, gap: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {['VISA', 'MC', 'MADA', 'AMEX'].map(b => (
+                    <span key={b} style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.6)", background: "rgba(255,255,255,0.08)", padding: "4px 8px", borderRadius: 4, letterSpacing: 0.5 }}>{b}</span>
+                  ))}
+                </div>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>🔒 Encrypted</span>
+              </div>
+            </div>
+          )}
+
+          {/* Placeholder for unsupported methods */}
+          {paymentMethod !== 'credit' && (
+            <div style={{ ...glass, textAlign: "center", padding: 40, color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
+              {paymentMethod === 'apple' ? 'Apple Pay payment not configured · غير مفعل' : 'STC Pay not configured · غير مفعل'}
+            </div>
+          )}
+
+          {/* Cancel + Pay (Pay only when Credit/Debit) */}
           <div style={{ display: "flex", gap: 8 }}>
             <button style={{ ...btn(false), flex: 1, justifyContent: "center" }} onClick={() => setStep(3)}>Cancel</button>
-            <button disabled={!paymentValid} onClick={handlePay}
-              style={{ ...btn(), flex: 2, justifyContent: "center", padding: "14px 24px", fontSize: 15, opacity: paymentValid ? 1 : 0.4, cursor: paymentValid ? "pointer" : "not-allowed" }}>
-              Pay {tPrice} ر.س
-            </button>
+            {paymentMethod === 'credit' && (
+              <button disabled={!paymentValid} onClick={handlePay}
+                style={{ ...btn(), flex: 2, justifyContent: "center", padding: "14px 24px", fontSize: 15, opacity: paymentValid ? 1 : 0.4, cursor: paymentValid ? "pointer" : "not-allowed" }}>
+                Pay {tPrice} ر.س
+              </button>
+            )}
           </div>
 
           {processing && (
@@ -863,7 +914,7 @@ export default function SeatBite() {
             </div>
           </div>
           <button style={{ ...btn(false), width: "100%", justifyContent: "center", marginTop: 8 }}
-            onClick={() => { setStep(0); setMovie(null); setVenue(null); setSeat(null); setCart({}); setOStage(0); setShowtimeId(null); setCardName(''); setCardNumber(''); setCardExpiry(''); setCardCvv(''); setFromTicket(false); if (window.location.search) window.history.replaceState({}, '', '/'); }}>
+            onClick={() => { setStep(0); setMovie(null); setVenue(null); setSeat(null); setCart({}); setOStage(0); setShowtimeId(null); setCardName(''); setCardNumber(''); setCardExpiry(''); setCardCvv(''); setPaymentMethod('credit'); setFromTicket(false); if (window.location.search) window.history.replaceState({}, '', '/'); }}>
             طلب جديد · New Order
           </button>
         </>}
