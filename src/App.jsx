@@ -383,13 +383,13 @@ export default function SeatBite() {
     alignItems: "center" 
   }}>
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{ background: "#fff", color: oc, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, fontSize: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }}>🍿</div>
-      <div style={{ fontFamily: fontD, fontSize: 28, letterSpacing: 2, lineHeight: 1 }}>SEATBITE</div>
+      <div className="sb-header-icon" style={{ background: "#fff", color: oc, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, fontSize: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }}>🍿</div>
+      <div className="sb-header-logo" style={{ fontFamily: fontD, fontSize: 28, letterSpacing: 2, lineHeight: 1 }}>SEATBITE</div>
     </div>
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      {tItems > 0 && <span style={{ background: "rgba(232,93,4,0.15)", color: "#fff", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{tItems} · {tPrice} ر.س</span>}
-      <button style={{ ...btn(false), padding: "8px 14px", fontSize: 13, background: "rgba(255,255,255,0.15)", border: "none" }} onClick={() => setAdminMode(true)}>Admin</button>
-      <button style={{ ...btn(false), padding: "8px 14px", fontSize: 13, background: "rgba(255,255,255,0.15)", border: "none" }}>تسجيل</button>
+    <div className="sb-header-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      {tItems > 0 && <span className="sb-header-cart" style={{ background: "rgba(232,93,4,0.15)", color: "#fff", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{tItems} · {tPrice} ر.س</span>}
+      <button className="sb-header-btn" style={{ ...btn(false), padding: "8px 14px", fontSize: 13, background: "rgba(255,255,255,0.15)", border: "none" }} onClick={() => setAdminMode(true)}>Admin</button>
+      <button className="sb-header-btn" style={{ ...btn(false), padding: "8px 14px", fontSize: 13, background: "rgba(255,255,255,0.15)", border: "none" }}>تسجيل</button>
     </div>
   </div>
 </header>
@@ -480,7 +480,7 @@ export default function SeatBite() {
             <div style={{ width: "70%", height: 4, margin: "0 auto 6px", background: `linear-gradient(90deg, transparent, rgba(232,93,4,0.4), transparent)`, borderRadius: 2 }} />
             <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", letterSpacing: 3 }}>الشاشة · SCREEN</span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 16 }}>
+          <div className="sb-seat-grid" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 16 }}>
             {SEAT_ROWS.map(({ row, seats }) => (
               <div key={row} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <span style={{ width: 16, fontSize: 10, color: "rgba(255,255,255,0.25)", textAlign: "right", marginRight: 4 }}>{row}</span>
@@ -640,7 +640,7 @@ export default function SeatBite() {
 
       {adminMode && (
         <div style={{ position: "fixed", inset: 0, background: "#0a0a0f", zIndex: 1000, overflow: "auto", padding: 24, fontFamily: font, color: "#f0ece4" }}>
-          <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div className="sb-admin-inner" style={{ maxWidth: 1200, margin: "0 auto" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
               <h1 style={{ fontFamily: fontD, fontSize: 36, letterSpacing: 2, color: "#fff" }}>ADMIN DASHBOARD</h1>
               <button style={{ ...btn(false), padding: "8px 16px" }} onClick={() => setAdminMode(false)}>← Back to Site</button>
@@ -662,7 +662,7 @@ export default function SeatBite() {
             {adminLoading ? (
               <div style={{ color: "rgba(255,255,255,0.5)", padding: 20, textAlign: "center" }}>Loading...</div>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <table className="sb-admin-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>
                     {["Order ID","Customer","Movie","Venue","Seat","Items","Total","Status","Action"].map((h) => (
@@ -704,6 +704,25 @@ export default function SeatBite() {
       <style>{`@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.5)} }
   @keyframes shimmer { 0%{opacity:0.3} 50%{opacity:0.6} 100%{opacity:0.3} }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── Mobile responsiveness (M6 rubric) ─── */
+  @media (max-width: 768px) {
+    /* Header: tighten everything so logo + cart + Admin + تسجيل fit on a phone */
+    .sb-header-actions { gap: 6px !important; }
+    .sb-header-logo    { font-size: 22px !important; letter-spacing: 1px !important; }
+    .sb-header-icon    { width: 30px !important; height: 30px !important; font-size: 16px !important; }
+    .sb-header-cart    { padding: 2px 8px !important; font-size: 10px !important; }
+    .sb-header-btn     { padding: 5px 9px !important; font-size: 11px !important; }
+
+    /* Admin overlay: let the wide table scroll horizontally instead of squishing 9 columns */
+    .sb-admin-inner    { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+    .sb-admin-table    { min-width: 900px !important; }
+  }
+
+  @media (max-width: 540px) {
+    /* Seat picker: rows E–H are ~512px wide; scroll horizontally on phones */
+    .sb-seat-grid      { overflow-x: auto !important; align-items: flex-start !important; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  }
   
   /* The ultimate reset for React/Vite/Next apps */
   html, body, #root { 
