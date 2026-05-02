@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { QRCodeSVG } from 'qrcode.react';
 
 /*──────────────────────────────────────────────
   FALLBACK DATA — real movies & venues used
@@ -168,6 +169,10 @@ export default function SeatBite() {
   const [adminOrders, setAdminOrders] = useState([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminFilter, setAdminFilter] = useState('all');
+  const [fromTicket, setFromTicket] = useState(false);
+  const [qrShowtime, setQrShowtime] = useState('');
+  const [qrSeat, setQrSeat] = useState('');
+  const [qrUrl, setQrUrl] = useState('');
 
   /* ── Fetch catalog (movies, venues, menu) on mount; fall back per-resource ── */
   useEffect(() => {
@@ -225,6 +230,31 @@ export default function SeatBite() {
       clearTimeout(wakeTimer);
     })();
     return () => { cancelled = true; clearInterval(iv); clearTimeout(wakeTimer); };
+  }, []);
+
+  /* ── On mount: handle ?showtime=&seat= URL params (QR ticket flow) ── */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stId = params.get('showtime');
+    const stSeat = params.get('seat');
+    if (!stId || !stSeat) return;
+    if (!/^[A-J][1-9][0-9]?$/.test(stSeat)) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/showtimes/${stId}`);
+        if (!res.ok) return; // 400/404 → fall back to normal homepage flow silently
+        const data = await res.json();
+        setMovie(data.movie);
+        setVenue(data.venue);
+        setShowtimeId(data.id);
+        setSeat(stSeat);
+        setFromTicket(true);
+        setStep(3);
+      } catch {
+        // network error → fall back silently
+      }
+    })();
   }, []);
 
   /* ── Pick venues for a movie from the (pre-loaded) catalog ── */
@@ -534,7 +564,12 @@ export default function SeatBite() {
 
         {/* ═══ STEP 3: Menu ═══ */}
         {step === 3 && <>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><Back to={2} /><span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>Seat {seat} · {venue.name}</span></div>
+          {fromTicket && (
+            <div style={{ background: "rgba(232,93,4,0.15)", border: "1px solid rgba(232,93,4,0.3)", borderRadius: 20, padding: "5px 12px", fontSize: 11, color: "rgba(255,255,255,0.85)", fontWeight: 600, display: "inline-flex", alignItems: "center", marginBottom: 12 }}>
+              From your ticket: {seat} at {venue.name}
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>{!fromTicket && <Back to={2} />}<span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>Seat {seat} · {venue.name}</span></div>
           <h1 style={{ fontFamily: fontD, fontSize: 32, letterSpacing: 1.5, marginBottom: 4, color: "#fff" }}>SNACKS & DRINKS 🍿</h1>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginBottom: 20 }}>نوصلك لمقعدك · Delivered to seat {seat}</p>
           <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -662,7 +697,7 @@ export default function SeatBite() {
             </div>
           </div>
           <button style={{ ...btn(false), width: "100%", justifyContent: "center", marginTop: 8 }}
-            onClick={() => { setStep(0); setMovie(null); setVenue(null); setSeat(null); setCart({}); setOStage(0); setShowtimeId(null); setCardName(''); setCardNumber(''); setCardExpiry(''); setCardCvv(''); }}>
+            onClick={() => { setStep(0); setMovie(null); setVenue(null); setSeat(null); setCart({}); setOStage(0); setShowtimeId(null); setCardName(''); setCardNumber(''); setCardExpiry(''); setCardCvv(''); setFromTicket(false); if (window.location.search) window.history.replaceState({}, '', '/'); }}>
             طلب جديد · New Order
           </button>
         </>}
@@ -727,6 +762,47 @@ export default function SeatBite() {
                 </tbody>
               </table>
             )}
+
+            {/* QR generator — separate section below the orders table */}
+            <div style={{ marginTop: 32, padding: 20, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12 }}>
+              <h2 style={{ fontFamily: fontD, fontSize: 24, letterSpacing: 1.5, color: "#fff", marginTop: 0, marginBottom: 12 }}>GENERATE SEAT QR</h2>
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 14 }}>Generate a printable QR for a physical seat ticket. Scanning it lands on the menu with showtime and seat pre-loaded.</p>
+
+              <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: 2, minWidth: 200 }}>
+                  <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", display: "block", marginBottom: 4 }}>Showtime ID</label>
+                  <input value={qrShowtime} onChange={(e) => setQrShowtime(e.target.value.trim())} placeholder="paste a showtime _id"
+                    style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 10px", color: "#fff", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 100 }}>
+                  <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", display: "block", marginBottom: 4 }}>Seat</label>
+                  <input value={qrSeat} onChange={(e) => setQrSeat(e.target.value.toUpperCase().slice(0, 3))} placeholder="A1"
+                    style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 10px", color: "#fff", fontSize: 13, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-end" }}>
+                  <button onClick={() => {
+                    if (!qrShowtime || !/^[A-J][1-9][0-9]?$/.test(qrSeat)) {
+                      alert('Need a showtime ID and a valid seat (e.g. A1, J99).');
+                      return;
+                    }
+                    setQrUrl(`https://seatbite.vercel.app/?showtime=${encodeURIComponent(qrShowtime)}&seat=${encodeURIComponent(qrSeat)}`);
+                  }} style={{ ...btn(), padding: "8px 14px", fontSize: 12 }}>Generate QR</button>
+                </div>
+              </div>
+
+              {qrUrl && (
+                <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap", marginTop: 12 }}>
+                  <div style={{ background: "#fff", padding: 12, borderRadius: 8 }}>
+                    <QRCodeSVG value={qrUrl} size={160} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>URL</div>
+                    <div style={{ fontSize: 12, fontFamily: "monospace", color: "rgba(255,255,255,0.85)", wordBreak: "break-all", marginBottom: 10, padding: 10, background: "rgba(0,0,0,0.3)", borderRadius: 6 }}>{qrUrl}</div>
+                    <button onClick={() => navigator.clipboard.writeText(qrUrl)} style={{ ...btn(false), padding: "6px 12px", fontSize: 12 }}>Copy URL</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

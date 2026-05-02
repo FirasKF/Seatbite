@@ -32,3 +32,15 @@ export const getTakenSeats = asyncHandler(async (req, res) => {
   const seats = await Order.distinct('seat', { showtime: id });
   res.json(seats);
 });
+
+export const getShowtime = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: 'showtime id must be a valid ObjectId' });
+  }
+  const showtime = await Showtime.findById(id).populate('movie').populate('venue');
+  if (!showtime) {
+    return res.status(404).json({ error: 'Showtime not found' });
+  }
+  res.json(showtime);
+});
