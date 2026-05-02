@@ -1,8 +1,18 @@
 # SeatBite — Cinema Food Ordering System
 
+> Deployed at https://seatbite.vercel.app — Backend at https://seatbite-api.onrender.com
+
 SeatBite is a full-stack web app that lets cinema-goers in Saudi Arabia order snacks, meals, and drinks delivered directly to their seat during a screening. Users select a now-showing movie, pick a venue and seat at one of the major Saudi chains (muvi, AMC, VOX), build a cart, and watch the order progress through a delivery timeline.
 
 This repository is the final milestone of a Software Engineering course project. It pairs a React + Vite frontend with a Node.js + Express backend and a seeded MongoDB Atlas database.
+
+## Live Demo
+
+- **Frontend**: https://seatbite.vercel.app
+- **Backend API**: https://seatbite-api.onrender.com
+- **Health check**: https://seatbite-api.onrender.com/api/health
+
+> Note: the backend runs on Render's free tier, which sleeps after 15 minutes of inactivity. The first request after a sleep takes 30–60 seconds while the server wakes up. The frontend shows a blue "Waking up server..." banner during this window — wait for it to disappear.
 
 ## Team
 
@@ -23,6 +33,21 @@ This repository is the final milestone of a Software Engineering course project.
 | Dev tooling | `nodemon` (auto-restart), `dotenv`, ESLint |
 
 The frontend and backend are **separate npm packages** — one `package.json` at the root, another inside `server/`, each with its own `node_modules`. A root passthrough script (`npm run server:dev`) delegates into `server/`.
+
+## Features
+
+- **Movie browsing** — 12 currently-showing titles with EN/AR language filter and chain badges (muvi, AMC, VOX)
+- **Cinema venue selection** — 17 real Saudi venues filtered by the chains showing the selected movie
+- **Interactive seat picker** — seat map with per-showtime "taken" markers that update as orders come in
+- **Bilingual menu** — 14 items (snacks / meals / drinks) with Arabic + English names and SAR pricing
+- **Cart with running total** — add/remove items; total is recomputed server-side at checkout
+- **Fake payment page** — card form (cardholder name, 16-digit card with auto-formatting, MM/YY expiry, CVV) with full client-side validation before order confirmation
+- **Order placement and delivery timeline** — `confirmed → preparing → onway → delivered`, auto-advances on the client and is updatable from the admin dashboard
+- **Admin dashboard** — accessible via the "Admin" button in the header; view all orders, filter by status, advance status with a single click
+- **User registration and JWT auth** — `/api/auth/register`, `/login`, `/me` endpoints with bcrypt password hashing (backend only — no frontend login UI yet)
+- **Mobile-responsive layout** — single-column flow scales to phone widths; seat picker and admin table become horizontally scrollable below 540px / 768px
+- **Cold-start wake-up banner** — informs users when the Render free tier is taking 30–60s to wake up, instead of falsely showing "live data unavailable"
+- **Graceful API fallback** — if the backend is fully unreachable, the frontend transparently switches to the in-file catalog with a yellow "Live data unavailable" banner
 
 ## Project Structure
 
@@ -768,15 +793,56 @@ The Phase 1 plan considered storing `takenSeats: [String]` directly on a Showtim
 - A database-level guarantee against double-booking, even under concurrent requests — Mongo's E11000 surfaces as a 409.
 - No need for two-phase reservations or stale-reservation cleanup jobs.
 
+## Deployment
+
+The app is deployed on a free-tier-only stack: Vercel (frontend), Render (backend), and MongoDB Atlas M0 (database). Every push to `main` redeploys both ends automatically.
+
+### Frontend — Vercel
+
+- URL: **https://seatbite.vercel.app**
+- Auto-deploys from `main` on every push
+- Vite production build (`npm run build` → `dist/`)
+- Environment: `VITE_API_URL=https://seatbite-api.onrender.com/api`
+- HTTPS handled automatically by Vercel
+
+### Backend — Render
+
+- URL: **https://seatbite-api.onrender.com**
+- Auto-deploys from `main` on every push
+- Free tier (web service); sleeps after 15 min of inactivity, ~30–60 s cold-start
+- HTTPS handled automatically by Render
+- Environment variables (set in the Render dashboard):
+  - `MONGO_URI` — MongoDB Atlas connection string
+  - `JWT_SECRET` — JWT signing secret
+  - `NODE_ENV=production` — switches morgan to `combined` log format
+  - `CORS_ORIGINS` — optional override; defaults to `http://localhost:5173,https://seatbite.vercel.app,*.vercel.app`
+
+### Database — MongoDB Atlas
+
+- M0 free-tier cluster, **Seoul region** (`ap-northeast-2`)
+- IP allow-list set to `0.0.0.0/0` for the demo (a production deployment would tighten this to Render's egress IPs)
+- Database name: `seatbite`
+- Collections: `users`, `movies`, `venues`, `menuitems`, `showtimes`, `orders`
+
+### CORS
+
+The Express server allows requests from:
+
+- `http://localhost:5173` — local Vite dev server
+- `https://seatbite.vercel.app` — production frontend
+- Any `*.vercel.app` subdomain — Vercel preview deploys for branches and PRs
+
+The list is configurable via the `CORS_ORIGINS` env var (comma-separated; supports `*.` hostname suffix wildcards). Rules in [server/app.js](server/app.js).
+
 ## Known Limitations & Future Work
 
-- **Showtime UI**: Phase 4 seeds 9 showtimes per movie+venue pair, but the SPA has no showtime picker. The frontend auto-selects the first showtime returned for the chosen movie+venue pair when transitioning Step 2 → Step 3. A small dropdown or list step between seat selection and the menu would expose this. The backend already supports it.
-- **No admin UI for order status**: the `status` field on Order is part of the schema (`confirmed | preparing | onway | delivered`), but there is no `PATCH /api/orders/:id/status` endpoint and no admin UI. The frontend simulates status transitions via a client-side `setTimeout` chain so the demo timeline still moves.
-- **No pagination on `GET /api/orders`**: the endpoint returns the 50 newest orders. With significant volume this would need a `?limit=` and `?cursor=` (or `?page=`) query.
-- **MongoDB Atlas IP allow-list at `0.0.0.0/0`** during development: the cluster accepts connections from any IP for ease of demo setup. A production deployment would tighten this to specific egress IPs (e.g. of the hosting platform).
-- **No automated frontend tests**: only ESLint runs. Vitest + React Testing Library would be the natural addition.
-- **Rate limiting on `/api/auth/login`**: not implemented. `express-rate-limit` would be a one-file addition.
-- **Inline express-validator polish**: validation lives inline in each controller. A `middleware/validate.js` running validator chains was deferred from the original plan.
+- **No login UI on the frontend** — `/api/auth/register`, `/login`, and `/me` are wired and tested, but the SPA doesn't expose a sign-in screen yet. The placeholder تسجيل button in the header is a no-op. The auth endpoints are fully documented in [API Documentation](#api-documentation) so a frontend pass can be added without backend changes.
+- **Render free-tier cold starts** — the backend sleeps after 15 minutes of inactivity. The first request after a sleep takes 30–60 seconds, partially mitigated by the in-app "Waking up server..." banner. Could be eliminated by upgrading to Render's paid tier, or by adding an external cron pinger (e.g. UptimeRobot hitting `/api/health` every 10 minutes).
+- **Showtime picker UI** — the frontend auto-selects the first available showtime for the chosen movie+venue pair. The backend supports listing all showtimes (`GET /api/showtimes?movieId=&venueId=`) but the SPA has no UI for the user to pick a specific one.
+- **No pagination on `GET /api/orders`** — endpoint caps at the 50 newest orders. With significant volume this would need a `?limit=` and `?cursor=` (or `?page=`) query.
+- **No automated frontend tests** — only ESLint runs. Vitest + React Testing Library would be the natural addition.
+- **No rate limiting on `/api/auth/login`** — `express-rate-limit` would be a one-file addition.
+- **Inline `express-validator` polish** — validation lives inline in each controller. A shared `middleware/validate.js` running validator chains was deferred from the original plan.
 
 ## Testing
 
