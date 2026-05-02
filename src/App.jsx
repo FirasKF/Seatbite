@@ -156,6 +156,8 @@ export default function SeatBite() {
   const [menu, setMenu] = useState(MENU);
   const [venuesByChain, setVenuesByChain] = useState(ALL_VENUES);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [wakingUp, setWakingUp] = useState(false);
+  const [wakeBannerDismissed, setWakeBannerDismissed] = useState(false);
   const [showtimeId, setShowtimeId] = useState(null);
   const [cardName, setCardName] = useState('');
   const [cardNumber, setCardNumber] = useState('');
@@ -173,6 +175,12 @@ export default function SeatBite() {
     const msgs = ["Loading catalog...", "Fetching movies...", "Fetching venues...", "Fetching menu...", "Almost ready..."];
     let i = 0;
     const iv = setInterval(() => { i = (i + 1) % msgs.length; if (!cancelled) setLoadMsg(msgs[i]); }, 2200);
+
+    // Render free tier cold-starts in 30–60s. If the catalog hasn't resolved by 5s,
+    // surface a wake-up notice so users know to wait instead of seeing CACHED prematurely.
+    const wakeTimer = setTimeout(() => {
+      if (!cancelled) setWakingUp(true);
+    }, 5000);
 
     (async () => {
       let allOk = true;
@@ -211,10 +219,12 @@ export default function SeatBite() {
       if (!cancelled) {
         setIsLive(allOk);
         setLoadingMovies(false);
+        setWakingUp(false);
       }
       clearInterval(iv);
+      clearTimeout(wakeTimer);
     })();
-    return () => { cancelled = true; clearInterval(iv); };
+    return () => { cancelled = true; clearInterval(iv); clearTimeout(wakeTimer); };
   }, []);
 
   /* ── Pick venues for a movie from the (pre-loaded) catalog ── */
@@ -398,6 +408,26 @@ export default function SeatBite() {
         <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 28 }}>
           {[0,1,2,3,4,5].map((i) => <div key={i} style={{ width: step === i ? 32 : 10, height: 10, borderRadius: 5, background: step >= i ? oc : "rgba(255,255,255,0.15)", transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)" }} />)}
         </div>
+
+        {wakingUp && !wakeBannerDismissed && loadingMovies && (
+          <div style={{
+            background: "rgba(59,130,246,0.12)",
+            border: "1px solid rgba(59,130,246,0.3)",
+            borderRadius: 10,
+            padding: "10px 14px",
+            marginBottom: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            fontSize: 12,
+            color: "rgba(255,255,255,0.7)",
+          }}>
+            <span>⏳ Waking up server... first request after idle takes 30-60 seconds on the free tier. Hang tight!</span>
+            <button onClick={() => setWakeBannerDismissed(true)} aria-label="Dismiss"
+              style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1 }}>×</button>
+          </div>
+        )}
 
         {!isLive && !bannerDismissed && !loadingMovies && (
           <div style={{
