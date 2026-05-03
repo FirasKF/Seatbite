@@ -317,6 +317,7 @@ export default function SeatBite() {
   const [filter, setFilter] = useState("all");
   const [langF, setLangF] = useState("all");
   const [oStage, setOStage] = useState(0);
+  const [liveOrderId, setLiveOrderId] = useState(null);
   const [loadMsg, setLoadMsg] = useState("Loading catalog...");
   const [menu, setMenu] = useState(MENU);
   const [venuesByChain, setVenuesByChain] = useState(ALL_VENUES);
@@ -444,7 +445,7 @@ export default function SeatBite() {
 
   /* ── Step 3 → 4: POST the order. Falls back to the local timeline if the API can't be reached. ── */
   const placeOrder = async () => {
-    const goLocal = () => { setStep(5); setOStage(0); };
+    const goLocal = (orderId = null) => { setLiveOrderId(orderId); setStep(5); setOStage(0); };
     if (!showtimeId) return goLocal();
     const items = Object.entries(cart).map(([id, qty]) => ({ menuItemId: id, qty }));
     try {
@@ -460,7 +461,8 @@ export default function SeatBite() {
         return;
       }
       if (!res.ok) throw new Error(`status ${res.status}`);
-      goLocal();
+      const created = await res.json();
+      goLocal(created.id);
     } catch {
       goLocal();
     }
@@ -503,10 +505,24 @@ export default function SeatBite() {
     }
   };
 
-  /* ── Order stage auto-advance ── */
+  /* ── Order stage poll: read the live status from the backend every 4s while on step 5 ── */
   useEffect(() => {
-    if (step === 5 && oStage < 3) { const t = setTimeout(() => setOStage((x) => x + 1), 3000); return () => clearTimeout(t); }
-  }, [step, oStage]);
+    if (step !== 5 || !liveOrderId) return;
+    const STATUS_TO_STAGE = { confirmed: 0, preparing: 1, onway: 2, delivered: 3 };
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/orders/${liveOrderId}`);
+        if (!res.ok) return;
+        const order = await res.json();
+        const stage = STATUS_TO_STAGE[order.status];
+        if (typeof stage === 'number') setOStage(stage);
+      } catch {
+        // network error — retain the last known oStage, don't reset
+      }
+    };
+    const iv = setInterval(poll, 4000);
+    return () => clearInterval(iv);
+  }, [step, liveOrderId]);
 
   const tItems = Object.values(cart).reduce((a, b) => a + b, 0);
   const tPrice = Object.entries(cart).reduce((s, [id, q]) => { const it = menu.find((m) => String(m.id) === id); return s + (it ? it.price * q : 0); }, 0);
@@ -926,7 +942,7 @@ export default function SeatBite() {
             </div>
           </div>
           <button style={{ ...btn(false), width: "100%", justifyContent: "center", marginTop: 8 }}
-            onClick={() => { setStep(0); setMovie(null); setVenue(null); setSeat(null); setCart({}); setOStage(0); setShowtimeId(null); setCardName(''); setCardNumber(''); setCardExpiry(''); setCardCvv(''); setPaymentMethod('credit'); setFromTicket(false); if (window.location.search) window.history.replaceState({}, '', '/'); }}>
+            onClick={() => { setStep(0); setMovie(null); setVenue(null); setSeat(null); setCart({}); setOStage(0); setShowtimeId(null); setLiveOrderId(null); setCardName(''); setCardNumber(''); setCardExpiry(''); setCardCvv(''); setPaymentMethod('credit'); setFromTicket(false); if (window.location.search) window.history.replaceState({}, '', '/'); }}>
             طلب جديد · New Order
           </button>
         </>}
