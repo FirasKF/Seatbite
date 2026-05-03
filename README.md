@@ -14,6 +14,10 @@ This repository is the final milestone of a Software Engineering course project.
 
 > Note: the backend runs on Render's free tier, which sleeps after 15 minutes of inactivity. The first request after a sleep takes 30–60 seconds while the server wakes up. The frontend shows a blue "Waking up server..." banner during this window — wait for it to disappear.
 
+## Demo Video
+- ## Demo
+[Watch the demo on YouTube](https://www.youtube.com/watch?v=zsG33NXEoz0)
+
 ## Team
 
 - FIRAS ALMASHAMA
